@@ -25,7 +25,7 @@ $ aiq
 ## Install
 
 ```bash
-uv tool install aiq
+uv tool install aiq-monitor
 ```
 
 Or from source:
@@ -69,7 +69,7 @@ Give your AI coding agent the ability to monitor quotas and switch accounts auto
 ### 1. Install the CLI
 
 ```bash
-uv tool install aiq
+uv tool install aiq-monitor
 ```
 
 ### 2. Install the skill

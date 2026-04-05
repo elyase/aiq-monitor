@@ -1,5 +1,5 @@
 [project]
-name = "aiq"
+name = "aiq-monitor"
 version = "0.1.0"
 description = "AI Quota — monitor and switch AI coding subscription accounts"
 requires-python = ">=3.12"

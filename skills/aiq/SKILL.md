@@ -11,7 +11,7 @@ Monitor usage quotas and manage AI coding subscription accounts from the termina
 
 ```bash
 # Install (requires Python 3.12+ and uv)
-uv tool install aiq
+uv tool install aiq-monitor
 ```
 
 If `aiq` is not on PATH, install from source:
