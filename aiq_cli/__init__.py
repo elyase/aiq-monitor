@@ -18,10 +18,12 @@ from __future__ import annotations
 
 from humancli import App, Context
 
+__version__ = "0.1.0"
+
 app = App(
     "aiq",
     description="AI Quota — monitor and switch AI coding accounts.",
-    version="0.1.0",
+    version=__version__,
 )
 
 from aiq_cli.commands import use_app, add_app, logout_app, rm_app, ls_app, import_app  # noqa: E402
