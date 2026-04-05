@@ -1,0 +1,35 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[[package]]
+name = "aiq"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "humancli" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "humancli", specifier = ">=0.4.0" }]
+
+[[package]]
+name = "docstring-parser"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442, upload-time = "2025-07-21T07:35:01.868Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896, upload-time = "2025-07-21T07:35:00.684Z" },
+]
+
+[[package]]
+name = "humancli"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "docstring-parser" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/4b/2ab6be451df513f413816b234a4e1b21b2dc39d2d90283e092a5c2659809/humancli-0.4.0.tar.gz", hash = "sha256:cc8fa162de865282c39188fd66cf020df29e7c6280c9e835a41dff32d4750d24", size = 65767, upload-time = "2026-03-22T01:10:05.578Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/b2/336bf0d41bd239c7cc84c75ee9c203cfe213fc8f2997d20b4ea5607afa1f/humancli-0.4.0-py3-none-any.whl", hash = "sha256:1fb307bf146e9dcd65704a211fea14f6be1d5c9032d0eec6170c631265d01636", size = 21461, upload-time = "2026-03-22T01:10:04.267Z" },
+]

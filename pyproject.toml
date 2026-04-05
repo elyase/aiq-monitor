@@ -1,0 +1,30 @@
+[project]
+name = "aiq"
+version = "0.1.0"
+description = "AI Quota — monitor and switch AI coding subscription accounts"
+requires-python = ">=3.12"
+readme = "README.md"
+license = "MIT"
+authors = [{name = "Yaser Martinez Palenzuela", email = "yaser.martinez@gmail.com"}]
+keywords = ["ai", "quota", "claude", "codex", "gemini", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = ["humancli>=0.4.0"]
+
+[project.urls]
+Repository = "https://github.com/elyase/aiq"
+
+[project.scripts]
+aiq = "aiq_cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aiq_cli"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
