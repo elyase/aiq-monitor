@@ -16,6 +16,8 @@ Usage:
 """
 from __future__ import annotations
 
+import sys
+
 from humancli import App, Context
 
 __version__ = "0.1.0"
@@ -39,14 +41,19 @@ app.mount(import_app, name="import")
 def status(ctx: Context):
     """Show quota usage for all accounts across all AI tools."""
     from aiq_cli.providers import discover_all
-    from aiq_cli.display import format_table
 
     accounts = discover_all()
 
-    if ctx.format in ("human", "toon"):
-        return format_table(accounts)
     return [a.to_dict() for a in accounts]
 
 
 def main():
+    args = sys.argv[1:]
+    if args in ([], ["--format", "human"], ["--format=human"]):
+        from aiq_cli.providers import discover_all
+        from aiq_cli.display import format_table
+
+        sys.stdout.write(format_table(discover_all()))
+        return
+
     app()
