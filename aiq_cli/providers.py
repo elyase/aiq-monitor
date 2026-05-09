@@ -25,7 +25,6 @@ CLAUDE_AUTH_FILES: dict[str, Path] = {
     ".claude.json": Path.home() / ".claude.json",
     "settings.json": Path.home() / ".claude" / "settings.json",
 }
-CODEX_AUTH = Path.home() / ".codex" / "auth.json"
 GEMINI_AUTH_FILES: dict[str, Path] = {
     "settings.json": Path.home() / ".gemini" / "settings.json",
     "oauth_credentials.json": Path.home() / ".gemini" / "oauth_credentials.json",
@@ -36,6 +35,15 @@ _CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 _CLAUDE_BETA = "oauth-2025-04-20"
 _CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
 _HTTP_TIMEOUT = 10
+
+
+def codex_home() -> Path:
+    """Return the active Codex home, honoring CODEX_HOME when set."""
+    configured = os.environ.get("CODEX_HOME", "").strip()
+    return Path(configured).expanduser() if configured else Path.home() / ".codex"
+
+
+CODEX_AUTH = codex_home() / "auth.json"
 
 
 def vault_root() -> Path:
@@ -147,12 +155,27 @@ def _read_json(path: Path) -> dict[str, object] | None:
         return None
 
 
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
 def _first(*values: object) -> object:
     """Return the first non-None value, defaulting to 0."""
     for v in values:
         if v is not None:
             return v
     return 0
+
+
+def _first_str(mapping: dict[str, object], *keys: str) -> str | None:
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 def _parse_iso_reset(s: str) -> float:
@@ -301,26 +324,128 @@ def _codex_plan_from_jwt(token: str) -> str:
     return auth.get("chatgpt_plan_type", "") if isinstance(auth, dict) else ""
 
 
+def _codex_tokens(auth: dict[str, object]) -> dict[str, object] | None:
+    tokens = auth.get("tokens")
+    if not isinstance(tokens, dict):
+        return None
+    return tokens
+
+
+def _codex_access_token(auth: dict[str, object]) -> str | None:
+    api_key = auth.get("OPENAI_API_KEY")
+    if isinstance(api_key, str) and api_key.strip():
+        return api_key.strip()
+
+    tokens = _codex_tokens(auth)
+    if not tokens:
+        return None
+    return _first_str(tokens, "access_token", "accessToken")
+
+
+def _codex_id_token(auth: dict[str, object]) -> str | None:
+    tokens = _codex_tokens(auth)
+    if not tokens:
+        return None
+    return _first_str(tokens, "id_token", "idToken")
+
+
+def _codex_account_id(auth: dict[str, object]) -> str | None:
+    tokens = _codex_tokens(auth)
+    if not tokens:
+        return None
+    return _first_str(tokens, "account_id", "accountId")
+
+
+def _codex_email_from_auth(auth: dict[str, object]) -> str | None:
+    access = _codex_access_token(auth)
+    id_token = _codex_id_token(auth)
+    for token in (id_token, access):
+        if not token:
+            continue
+        email = _codex_email_from_jwt(token)
+        if email != "unknown":
+            return email
+    return None
+
+
+def _codex_plan_from_auth(auth: dict[str, object]) -> str:
+    access = _codex_access_token(auth)
+    id_token = _codex_id_token(auth)
+    for token in (id_token, access):
+        if not token:
+            continue
+        plan = _codex_plan_from_jwt(token)
+        if plan:
+            return plan
+    return ""
+
+
+def _codex_usage_url() -> str:
+    config = _read_text(codex_home() / "config.toml")
+    base_url = ""
+    if config:
+        for raw_line in config.splitlines():
+            line = raw_line.split("#", 1)[0].strip()
+            if not line or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key.strip() != "chatgpt_base_url":
+                continue
+            base_url = value.strip().strip("\"'")
+            break
+
+    if not base_url:
+        return _CODEX_USAGE_URL
+
+    base_url = base_url.rstrip("/")
+    if base_url.startswith(("https://chatgpt.com", "https://chat.openai.com")) and "/backend-api" not in base_url:
+        base_url += "/backend-api"
+    path = "/wham/usage" if "/backend-api" in base_url else "/api/codex/usage"
+    return base_url + path
+
+
+def _codex_reset_seconds(window: dict[str, object]) -> float:
+    reset_after = window.get("reset_after_seconds")
+    if isinstance(reset_after, (int, float)):
+        return float(reset_after)
+    if isinstance(reset_after, str):
+        try:
+            return float(reset_after)
+        except ValueError:
+            pass
+
+    reset_at = window.get("reset_at")
+    if isinstance(reset_at, (int, float)):
+        return max(0.0, float(reset_at) - time.time())
+    if isinstance(reset_at, str):
+        try:
+            return max(0.0, float(reset_at) - time.time())
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
 def codex_active_identity() -> tuple[str | None, str | None, str | None]:
     """Return (email, access_token, account_id) for active Codex account."""
     data = _read_json(CODEX_AUTH)
     if not data:
         return None, None, None
-    tokens = data.get("tokens", {})
-    if not isinstance(tokens, dict):
-        return None, None, None
-    access = tokens.get("access_token")
-    account_id = tokens.get("account_id")
-    email = _codex_email_from_jwt(access) if access else None
+    access = _codex_access_token(data)
+    account_id = _codex_account_id(data)
+    email = _codex_email_from_auth(data)
     return email, access, account_id
 
 
-def _codex_fetch_usage(access_token: str, account_id: str) -> Account:
-    status_code, data = _http_get(_CODEX_USAGE_URL, {
+def _codex_fetch_usage(access_token: str, account_id: str | None) -> Account:
+    headers = {
         "Authorization": f"Bearer {access_token}",
-        "chatgpt-account-id": account_id,
         "User-Agent": "aiq/0.1",
-    })
+        "Accept": "application/json",
+    }
+    if account_id:
+        headers["chatgpt-account-id"] = account_id
+
+    status_code, data = _http_get(_codex_usage_url(), headers)
 
     if status_code == 401:
         return Account(tool="codex", email="", status="expired", error="Token expired — run: codex login")
@@ -338,9 +463,9 @@ def _codex_fetch_usage(access_token: str, account_id: str) -> Account:
     secondary = rate_limit.get("secondary_window") or {} if isinstance(rate_limit, dict) else {}
 
     fh_pct = primary.get("used_percent", 0)
-    fh_reset = primary.get("reset_after_seconds", 0)
+    fh_reset = _codex_reset_seconds(primary)
     sd_pct = secondary.get("used_percent", 0)
-    sd_reset = secondary.get("reset_after_seconds", 0)
+    sd_reset = _codex_reset_seconds(secondary)
 
     limited = isinstance(rate_limit, dict) and (
         rate_limit.get("limit_reached", False) or not rate_limit.get("allowed", True))
@@ -356,7 +481,7 @@ def _codex_fetch_usage(access_token: str, account_id: str) -> Account:
 
 def _discover_codex() -> list[Account]:
     vault_dir = vault_root() / "codex"
-    active_email, _, _ = codex_active_identity()
+    active_email, active_access, active_account_id = codex_active_identity()
     accounts: list[Account] = []
     emails = sorted(p.name for p in vault_dir.iterdir()) if vault_dir.is_dir() else []
 
@@ -364,24 +489,21 @@ def _discover_codex() -> list[Account]:
         vault_auth = _read_json(vault_dir / email / "auth.json")
         if not vault_auth:
             return Account(tool="codex", email=email, status="error", error="No auth.json in vault")
-        tokens = vault_auth.get("tokens") or {}
-        if not isinstance(tokens, dict):
-            return Account(tool="codex", email=email, status="error", error="Invalid auth.json")
-        access = tokens.get("access_token")
-        account_id = tokens.get("account_id")
-        if not access or not account_id:
-            return Account(tool="codex", email=email, status="error", error="Missing token/account_id")
+        access = _codex_access_token(vault_auth)
+        account_id = _codex_account_id(vault_auth)
+        if not access:
+            return Account(tool="codex", email=email, status="error", error="Missing access token")
 
         exp = _decode_jwt(access).get("exp")
         if isinstance(exp, (int, float)) and exp < time.time():
             return Account(tool="codex", email=email, is_active=(email == active_email),
-                           status="expired", error="Token expired", plan_type=_codex_plan_from_jwt(access))
+                           status="expired", error="Token expired", plan_type=_codex_plan_from_auth(vault_auth))
 
         acct = _codex_fetch_usage(access, account_id)
         acct.email = email
         acct.is_active = (email == active_email)
         if not acct.plan_type:
-            acct.plan_type = _codex_plan_from_jwt(access)
+            acct.plan_type = _codex_plan_from_auth(vault_auth)
         return acct
 
     if emails:
@@ -392,6 +514,15 @@ def _discover_codex() -> list[Account]:
                     accounts.append(future.result())
                 except Exception as e:  # noqa: BLE001
                     accounts.append(Account(tool="codex", email=futures[future], status="error", error=str(e)))
+
+    if active_email and active_email not in emails and active_access:
+        active_auth = _read_json(CODEX_AUTH) or {}
+        acct = _codex_fetch_usage(active_access, active_account_id)
+        acct.email = active_email
+        acct.is_active = True
+        if not acct.plan_type:
+            acct.plan_type = _codex_plan_from_auth(active_auth)
+        accounts.append(acct)
 
     accounts.sort(key=lambda a: (not a.is_active, a.email))
     return accounts
